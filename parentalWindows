@@ -1,0 +1,117 @@
+#include<windows.h>// библиотека для процессов и событий
+#include <conio.h>//для _getch()
+#include <vector>//библиотека для массива процессов
+#include <string> 
+#include <iostream> 
+
+using namespace std;
+
+int main() {
+	vector <HANDLE> processes;            // вектор дескрипторов процессов
+	HANDLE signalFromChild = CreateEvent(NULL, FALSE, FALSE, L"signal");        //событие, созданное в будущем в дочернем процессе
+	vector <HANDLE> eventChild;           //вектор дескрипторов событий
+	bool flag = false;
+	cout << "Parent process running... \n" << endl;
+	printf("+ : to create new process\n- : to delete last process\nq : exit\n\n");
+	char choice = '+';
+	while (true) {
+		choice = _getch();           //ожидание нажатия клавиши и получение ее кода
+		switch (choice) {
+		case '+': {
+			cout << "\nNew process!\n";
+      //Создание нового процесса
+			PROCESS_INFORMATION pi;            //указатель на структуру, где будут информаци о процессе
+			STARTUPINFO si; //параметры окна
+			ZeroMemory(&si, sizeof(si));          //обнулить
+			si.cb = sizeof(si);//задать размер
+			ZeroMemory(&pi, sizeof(pi));          //обнулить
+			int procNum = processes.size();          //получение числа существуюдих процессов
+			char eventName[2];                    //дочерний процесс должен выводить свой номер
+			eventName[0] = procNum + 0x30;        //создание символа из номера
+			eventName[1] = '\0';
+			HANDLE initChild = CreateEvent(NULL, FALSE, FALSE, L"1");          //создание события
+			eventChild.push_back(initChild);		
+			if (!CreateProcess(L"D:\\Проекты\\СПОВМ лабы\\LB2INP\\Debug\\LB2INP.exe",   //создание процесса, его адрес
+			  (LPWSTR)(" " , eventName),               //в командную строку имя модуля, передаём процессу
+				NULL,//атрибуты защиты для процесса
+				NULL,//атрибуты защиты для первого потока
+				FALSE,//флаг наследования дескрипторов
+				0,  флаг способа создания процесса
+				NULL,//блок переменных окружения, NULL-родительский
+				NULL,//текущий диск и каталог
+				&si, //парматеры окна
+				&pi // адрес структуры для хранени информации о процессе
+			))
+			{
+				printf("Error! Probably problems with the path\n");
+				rewind(stdin);
+				return -1;
+			}
+			processes.push_back(pi.hProcess);//into the end of vector
+			break;
+		}
+
+		case '-': {
+			cout << "\nDelete process!\n";//сообщение
+			if (processes.size() == 0) {
+				cout << "Nothing to delete..." << endl;   //если процессов нет
+				break;
+			}
+			else {
+				HANDLE closingProc = processes[processes.size() - 1];//последний процкесс 
+				processes.pop_back();//очистить последни элемент вектора
+
+				TerminateProcess(closingProc, 0);//завершить последний процесс
+				CloseHandle(closingProc);//закрыть дескриптор процесса
+				eventChild.pop_back();//завершить посленее событие, связанное с этим процессом
+			}
+			break;
+		}
+
+
+		case 'q': {
+			//cout << choice << endl;
+
+			for (int i = processes.size() - 1; i >= 0; i--) {
+				TerminateProcess(processes[i], 0); //завершить процессы
+				CloseHandle(processes[i]); //удалить дескрипторы
+			}
+			processes.clear(); //очистить вектор
+			cout << "\nall processes were killed..." << endl; //сообщение о закрытии
+			return 0;
+		}
+
+
+		default:
+			printf("Wrong input! Try again...\n ");
+			break;
+		}
+		while (true) {
+			for (int i = 0; i < processes.size(); i++) {
+				rewind(stdin);
+				SetEvent(eventChild[i]);
+				
+				WaitForSingleObject(signalFromChild, INFINITE);
+				if (_kbhit()) { //нажата ли клавиша на клавиатуре
+
+					flag = true;
+					break;
+
+				}
+			}
+			if(processes.size()==0)
+            	if (_kbhit()) { //нажата ли клавиша на клавиатуре
+
+				break;
+
+			}
+			if (flag == true) {
+				flag = false;
+				break;
+			}
+		}
+
+
+	}
+
+}
